@@ -5,6 +5,14 @@ const gameController = require('../controllers/game');
 
 const router = express.Router();
 
-router.get('/game', gameController.createRoom);
+router.get('/', gameController.getRooms);
+
+router.post('/', gameController.createRoom);
+
+router.post('/:roomId', gameController.joinRoom);
+
+router.get('/:roomId', gameController.enterRoom);
+
+router.post('/:roomId/playRound', gameController.playRound);
 
 module.exports = router;
