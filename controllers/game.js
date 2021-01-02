@@ -1,6 +1,8 @@
 // const fs = require('fs');
 // const path = require('path');
 
+const room = require("../models/room");
+
 // const p = path.join(
 //   path.dirname(process.mainModule.filename),
 //   'data',
@@ -12,6 +14,8 @@ Player = require("../models/player");
 Room = require("../models/room");
 Game = require("../models/game");
 Box = require("../models/box");
+
+io = require('../socket');
 
 exports.getRooms = async (req, res, next) => {
   try {
@@ -55,23 +59,15 @@ exports.createRoom = async (req, res, next) => {
 
     await p1.save();
 
-    let g2 = new Game();
-
-    await g2.save();
-
-    let p2 = await Player.findOne({name: 'player b'});
-    p2.game = g2._id;
-
-    await p2.save();
-
 
     await room.addPlayer(p1);
-    await room.addPlayer(p2);
 
     res.status(201).json({
         message: 'room created succesfully',
-        roomId: room._id
+        roomId: room._id,
+        game: g1
     });
+
   } catch (err) {
     console.log(err);
   }
@@ -98,8 +94,10 @@ exports.joinRoom = async (req, res, next) => {
 
 
     res.status(201).json({
-        message: 'joined game succesfully'
+        message: 'joined game succesfully',
+        game: g3
     });
+
   } catch (err) {
     console.log(err);
   }
@@ -122,30 +120,60 @@ exports.enterRoom = async (req, res, next) => {
   }
 }
 
-exports.playRound = (req, res, next) => {
+exports.playRound = async (req, res, next) => {
+  try {
     let roomId = req.params.roomId;
 
-    room = rooms.find((r) => r.id == roomId)
-    
+    let room = await Room.findById(roomId).populate({
+      path: 'players',
+      populate: {
+        path: 'game'
+      }
+    }).populate('boxes');
 
     room.dice1 = Math.floor(Math.random() * (6) ) + 1;
     room.dice1 = Math.floor(Math.random() * (6) ) + 1;
 
-    let p = room.players[room.playerTurn];
+    let p = room.players[room.playTurn];
     let dice = room.dice1 + room.dice2;
 
     while (dice > 0) {
-        p.game.pos ++;
+        p.game.pos++;
         if (p.game.pos > 40) p.game.pos = 1;
 
-        room.boxes[p.game.pos-1].stepsBy(room, p);
+        //room.boxes[p.game.pos-1].stepsBy(room, p);
         dice--;
     }
 
-    room.players[room.playerTurn] = p;
+    room.players[room.playTurn] = p;
 
-    room.playerTurn = (room.playerTurn + 1) % 3;
+    room.playTurn = (room.playTurn + 1) % room.numberPlayers;
 
-    res.status(201).json(room);
-    room.boxes[p.game.pos-1].landsOn(room, p);
+    await p.game.save();
+    await room.save();
+    //res.status(201).json(room);
+    io.getIO().to(room._id.toString()).emit('playRound', room);
+    //room.boxes[p.game.pos-1].landsOn(room, p);
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+exports.sendMessage = async (req, res, next) => {
+  try {
+  let roomId = req.params.roomId;
+
+  let room = await Room.findById(roomId);
+
+  let message = req.body.message;
+
+  room.chat.push(message);
+
+  await room.save();
+  
+  io.getIO().to(room._id.toString()).emit('chatMessage', { newMessage: message });
+
+  } catch (err) {
+    console.log(err);
+  }
 }

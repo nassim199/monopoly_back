@@ -29,6 +29,10 @@ const roomSchema = new Schema({
     playTurn: {
         type: Number,
         default: 0
+    },
+    chat: {
+        type: [String], 
+        default:[]
     }
 })
 

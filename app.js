@@ -29,9 +29,13 @@ app.use((req, res) => {
     return res
 });
 
-mongoose.connect("mongodb+srv://nassim199:Nasim_201@cluster0.2xoat.mongodb.net/monopoly?retryWrites=true&w=majority")
+
+mongoose.connect("mongodb+srv://nassim199:Nasim_201@cluster0.2xoat.mongodb.net/monopoly?retryWrites=true&w=majority", { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
-    console.log("connected successfully to database");
-    app.listen(3000);
+    const server = app.listen(3000);
+    require('./socket').init(server);
   })
-  .catch((err) => console.log(err));
+  .catch((err) => {
+    console.log("error in the mongo db connection");
+    console.log(err);
+  });

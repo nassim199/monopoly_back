@@ -15,4 +15,7 @@ router.get('/:roomId', gameController.enterRoom);
 
 router.post('/:roomId/playRound', gameController.playRound);
 
+router.post('/:roomId/chat', gameController.sendMessage);
+
+
 module.exports = router;
