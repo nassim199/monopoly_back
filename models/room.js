@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 Box = require('./box');
+Game = require('./game');
+Player = require('./player');
 
 const roomSchema = new Schema({
     numberPlayers: {
@@ -21,11 +23,11 @@ const roomSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Player'
     }],
-    boxes: [{
+    boxes:[{
         type: Schema.Types.ObjectId,
         ref: 'Box',
         required: true
-    }],
+        }],
     playTurn: {
         type: Number,
         default: 0
@@ -37,10 +39,46 @@ const roomSchema = new Schema({
 })
 
 roomSchema.methods.addPlayer = function(playerId) {
-    this.players.push(playerId);
 
-    return this.save();
+    let g = new Game();
+    let player;
+
+    return g.save().then(() => {
+        return Player.findById(playerId);
+    }).then((p) => {
+        player = p;
+        p.game = g._id;
+        return p.save();
+    }).then(() => {
+        this.players.push(playerId);
+        return this.save();
+    }).then(() => { 
+        return {
+            game: g,
+            player: player
+        } 
+    });
+
 };
+
+roomSchema.methods.removePlayer =  function(playerId) {
+    let player;
+
+    return Player.findById(playerId).then((p) => {
+        player = p;
+        return Game.findByIdAndDelete(p.game);
+    }).then(() => {
+        player.game = undefined;
+        
+        return player.save();
+    }).then(() => {
+        this.players = this.players.filter((p) => player._id.toString() != p._id.toString())
+
+        return this.save();
+    }).then(() => {
+        return player;
+    });
+}
 
 module.exports = mongoose.model('Room', roomSchema);
 

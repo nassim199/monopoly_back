@@ -9,6 +9,7 @@ const room = require("../models/room");
 //   'rooms.json'
 // );
 
+let i = 0;
 
 Player = require("../models/player");
 Room = require("../models/room");
@@ -47,25 +48,12 @@ exports.createRoom = async (req, res, next) => {
       boxes: boxes
     });
 
-    //await room.save();
-    
-    let g1 = new Game();
-
-    await g1.save();
-
-    let p1 = await Player.findById(playerId);
-    p1.game = g1._id;
-
-
-    await p1.save();
-
-
-    await room.addPlayer(p1);
+    let play = await room.addPlayer(playerId);
 
     res.status(201).json({
         message: 'room created succesfully',
         roomId: room._id,
-        game: g1
+        game: play.g
     });
 
   } catch (err) {
@@ -79,33 +67,47 @@ exports.joinRoom = async (req, res, next) => {
     let roomId = req.params.roomId;
     let room = await Room.findById(roomId);
 
-    let g3 = new Game();
-
-    await g3.save();
-
-    let p3 = await Player.findById(playerId);
-    p3.game = g3._id;
-
-
-    await p3.save();
-
-
-    await room.addPlayer(p3._id);
+    let play = await room.addPlayer(playerId);
 
 
     res.status(201).json({
         message: 'joined game succesfully',
-        game: g3
+        game: play.game
     });
+
+    io.getIO().to(roomId).emit('joinedRoom', play.player);
 
   } catch (err) {
     console.log(err);
   }
 }
 
+exports.leaveRoom = async (req, res, next) => {
+  try {
+    let roomId = req.params.roomId;
+
+    let playerId = req.body.playerId;
+
+    let room = await Room.findById(roomId);
+
+    let p = await room.removePlayer(playerId);
+
+    io.getIO().emit('leftRoom', p);
+
+    res.status(201).json({
+      message: "player deleted successfully"
+    })
+
+  } catch (err) {
+
+  }
+}
+
 exports.enterRoom = async (req, res, next) => {
   try {
     let roomId = req.params.roomId;
+
+    // Note : if it was a request from waiting room no need to populate game and boxes
 
     let room = await Room.findById(roomId).populate({
       path: 'players',
@@ -115,13 +117,31 @@ exports.enterRoom = async (req, res, next) => {
     }).populate('boxes');
   
     res.status(201).json(room);
+
   } catch (err) {
     console.log(err);
   }
 }
 
+exports.deleteRoom = async (req, res, next) => {
+  let roomId = req.params.roomId;
+  let room = await Room.findById(roomId);
+
+  await room.boxes.forEach(async (b) => {
+    await Box.findByIdAndDelete(b);
+  });
+
+  await Room.findByIdAndDelete(roomId);
+
+  res.status(201).json({
+    message: "delete successful"
+  });
+}
+
 exports.playRound = async (req, res, next) => {
   try {
+    i++;
+    console.log(i);
     let roomId = req.params.roomId;
 
     let room = await Room.findById(roomId).populate({
@@ -147,13 +167,19 @@ exports.playRound = async (req, res, next) => {
 
     room.players[room.playTurn] = p;
 
-    room.playTurn = (room.playTurn + 1) % room.numberPlayers;
+    // Note : temporary before setting bot - room.numberPlayers;
+    room.playTurn = (room.playTurn + 1) %  room.players.length;
 
     await p.game.save();
     await room.save();
-    //res.status(201).json(room);
-    io.getIO().to(room._id.toString()).emit('playRound', room);
+
+    io.getIO().to(roomId).emit('playRound', room);
+
     //room.boxes[p.game.pos-1].landsOn(room, p);
+
+    res.status(201).json({
+      message: "turn played successfully"
+    })
   } catch (err) {
     console.log(err);
   }
@@ -171,7 +197,11 @@ exports.sendMessage = async (req, res, next) => {
 
   await room.save();
   
-  io.getIO().to(room._id.toString()).emit('chatMessage', { newMessage: message });
+  io.getIO().to(roomId).emit('chatMessage', { newMessage: message });
+
+  res.status(201).json({
+    message: 'message sent successfully'
+  })
 
   } catch (err) {
     console.log(err);

@@ -13,6 +13,10 @@ router.post('/:roomId', gameController.joinRoom);
 
 router.get('/:roomId', gameController.enterRoom);
 
+router.post('/:roomId/leaveRoom', gameController.leaveRoom);
+
+router.post('/:roomId/deleteRoom', gameController.deleteRoom);
+
 router.post('/:roomId/playRound', gameController.playRound);
 
 router.post('/:roomId/chat', gameController.sendMessage);
