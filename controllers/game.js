@@ -1,20 +1,6 @@
-// const fs = require('fs');
-// const path = require('path');
+const Room = require("../models/room");
 
-const room = require("../models/room");
-
-// const p = path.join(
-//   path.dirname(process.mainModule.filename),
-//   'data',
-//   'rooms.json'
-// );
-
-let i = 0;
-
-Player = require("../models/player");
-Room = require("../models/room");
-Game = require("../models/game");
-Box = require("../models/box");
+const initialData = require("../models/initialBoxesData");
 
 io = require('../socket');
 
@@ -37,15 +23,9 @@ exports.createRoom = async (req, res, next) => {
     let playerId = req.body.playerId;
     let numberPlayers = req.body.numberPlayers;
 
-    let boxes = Array(40).fill().map((_, i) => new Box({pos: i+1}))
-    
-    for (let i = 0; i < boxes.length; i++) {
-      await boxes[i].save();
-    }
-
     let room = new Room({
       numberPlayers: numberPlayers,
-      boxes: boxes
+      boxes: initialData.initialData
     });
 
     let play = await room.addPlayer(playerId);
@@ -53,7 +33,7 @@ exports.createRoom = async (req, res, next) => {
     res.status(201).json({
         message: 'room created succesfully',
         roomId: room._id,
-        game: play.g
+        game: play.game
     });
 
   } catch (err) {
@@ -114,7 +94,7 @@ exports.enterRoom = async (req, res, next) => {
       populate: {
         path: 'game'
       }
-    }).populate('boxes');
+    });
   
     res.status(201).json(room);
 
@@ -140,8 +120,6 @@ exports.deleteRoom = async (req, res, next) => {
 
 exports.playRound = async (req, res, next) => {
   try {
-    i++;
-    console.log(i);
     let roomId = req.params.roomId;
 
     let room = await Room.findById(roomId).populate({
@@ -149,7 +127,7 @@ exports.playRound = async (req, res, next) => {
       populate: {
         path: 'game'
       }
-    }).populate('boxes');
+    });
 
     room.dice1 = Math.floor(Math.random() * (6) ) + 1;
     room.dice1 = Math.floor(Math.random() * (6) ) + 1;
@@ -178,7 +156,7 @@ exports.playRound = async (req, res, next) => {
     //room.boxes[p.game.pos-1].landsOn(room, p);
 
     res.status(201).json({
-      message: "turn played successfully"
+      message: "turn played successfully",
     })
   } catch (err) {
     console.log(err);

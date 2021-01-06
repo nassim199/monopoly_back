@@ -24,9 +24,13 @@ const roomSchema = new Schema({
         ref: 'Player'
     }],
     boxes:[{
-        type: Schema.Types.ObjectId,
-        ref: 'Box',
-        required: true
+        state: {
+            type: Number
+        },
+        owner: {
+            type: Schema.Types.ObjectId,
+            ref: 'Player'
+        }
         }],
     playTurn: {
         type: Number,
