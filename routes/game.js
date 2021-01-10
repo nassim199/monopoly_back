@@ -19,6 +19,10 @@ router.post('/:roomId/deleteRoom', gameController.deleteRoom);
 
 router.post('/:roomId/playRound', gameController.playRound);
 
+router.post('/:roomId/buy', gameController.buy);
+
+router.post('/:roomId/build', gameController.build);
+
 router.post('/:roomId/chat', gameController.sendMessage);
 
 
