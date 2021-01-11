@@ -23,6 +23,8 @@ router.post('/:roomId/buy', gameController.buy);
 
 router.post('/:roomId/build', gameController.build);
 
+router.post('/:roomId/mortage', gameController.mortage);
+
 router.post('/:roomId/chat', gameController.sendMessage);
 
 

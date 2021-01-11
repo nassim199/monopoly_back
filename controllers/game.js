@@ -210,6 +210,36 @@ canBuild = (room, player) => {
 
 }
 
+canMortage = (room, player) => {
+  let pos = player.game.pos;
+  let b = room.boxes[pos];
+  let pData = initialData.propertiesData[pos];
+
+  if (b.state < 1)
+    return false;
+
+  if (pData.type != 'Property-Ground')
+    return false;
+
+  if (player._id.toString() != b.owner.toString())
+    return false;
+  
+  //to test later
+
+  // let familyBoxes = room.boxes.filter((_, i) => initialData.propertiesData[i].color == pData.color);
+
+  // for (let i = 0; i < familyBoxes.length; i++) {
+  //   const box = familyBoxes[i];
+    
+  //   if (b.state < box.state)
+  //     return false;
+    
+  // }
+
+  return true;
+
+}
+
 exports.playRound = async (req, res, next) => {
   try {
     let roomId = req.params.roomId;
@@ -225,73 +255,97 @@ exports.playRound = async (req, res, next) => {
     room.dice2 = Math.floor(Math.random() * (6) ) + 1;
 
     let p = room.players[room.playTurn];
-    let steps = room.dice1 + room.dice2;
-
-    p.game = movePlayer(p.game, steps, 'forward');
-
-    room.players[room.playTurn] = p;
-
-    
     let action;
-    let b = room.boxes[p.game.pos];
-    let pData = initialData.propertiesData[p.game.pos]
+    let next = true;
 
-    switch (pData.type.split('-')[0]) {
-      case 'Property':
-        if (b.state == 0) {
-          if (p.game.money >= pData.price) {
-            action = 'buy';
-            blockTurn(room);
-          } else {
-            //put to auction
-          }
-        } else {
-          let p2 = room.players.find((p) => b.owner.toString() == p._id.toString());
-          if (b.state != -1) {
-            let price = 0;
-            switch (pData.type.split('-')[1]) {
-              case 'Ground':
-                price = pData.prices[b.state];
-                break;
-              case 'Station':
-                price = stationPrice(p2.game);            
-                break;
-              case 'Util':
-                price = utilsPrice(p2.game, steps);
-                break;
-            }
-            transferMoney(p2.game, p.game, price);
-            await p2.game.save();
-          }
-        }
-        break;
-      case 'Taxe':
-          let amount = (p.game.pos == 4) ? 200 : 100;
-          removeMoney(p.game, amount);
-        break;
-      case 'Gotoprison':
-        goToPrison(p.game);
-        break;
-      case 'Card':
-        break;
-    }
-
-    if (!action) {
-      if (room.dice1 != room.dice2) {
+    if (p.game.state.startsWith('prison')) {
+      if (req.body.pay || p.game.state == 'prison--') {
         p.game.state = 'free';
-        nextTurn(room);
+        if (req.body.pay)
+          removeMoney(p.game, 50);
       } else {
-        if (p.game.state == 'free--') {
-          goToPrison(p.game);
-          nextTurn(room);
+        if (room.dice1 == room.dice2) {
+          p.game.state = 'free';
         } else {
           p.game.state += '-';
         }
       }
+    } else {
+      if (room.dice1 != room.dice2) {
+        p.game.state = 'free';
+      } else {
+        if (p.game.state == 'free--') {
+          goToPrison(p.game);
+        } else {
+          p.game.state += '-';
+          next = false;
+        }
+      }
     }
 
+    if (p.game.state.startsWith('free')) {
 
-    await p.game.save();
+      let steps = room.dice1 + room.dice2;
+
+      p.game = movePlayer(p.game, steps, 'forward');
+
+      room.players[room.playTurn] = p;
+
+      
+      let b = room.boxes[p.game.pos];
+      let pData = initialData.propertiesData[p.game.pos]
+
+      switch (pData.type.split('-')[0]) {
+        case 'Property':
+          if (b.state == 0) {
+            if (p.game.money >= pData.price) {
+              action = 'buy';
+              blockTurn(room);
+              next = false;
+            } else {
+              //put to auction
+            }
+          } else {
+            let p2 = room.players.find((p) => b.owner.toString() == p._id.toString());
+            if (b.state != -1) {
+              let price = 0;
+              switch (pData.type.split('-')[1]) {
+                case 'Ground':
+                  price = pData.prices[b.state];
+                  break;
+                case 'Station':
+                  price = stationPrice(p2.game);            
+                  break;
+                case 'Util':
+                  price = utilsPrice(p2.game, steps);
+                  break;
+              }
+              transferMoney(p2.game, p.game, price);
+              await p2.game.save();
+            }
+          }
+          break;
+        case 'Taxe':
+            let amount = (p.game.pos == 4) ? 200 : 100;
+            removeMoney(p.game, amount);
+          break;
+        case 'Gotoprison':
+          goToPrison(p.game);
+          //action = ''
+          break;
+        case 'Card':
+          break;
+      }
+
+      await p.game.save();
+
+    } 
+
+
+    if (next) {
+      nextTurn(room);
+    }
+
     await room.save();
 
     io.getIO().to(roomId).emit('playRound', room);
@@ -318,6 +372,7 @@ exports.buy = async (req, res, next) => {
       }
     });
     
+    
     resumeTurn(room);
     let p = room.players[room.playTurn];
 
@@ -331,7 +386,8 @@ exports.buy = async (req, res, next) => {
       await p.game.save();
     }
 
-    nextTurn(room);
+    if (!p.game.state.startsWith('free-'))
+      nextTurn(room);
 
     await room.save();
 
@@ -359,14 +415,45 @@ exports.build = async (req, res, next) => {
     });
 
     let p = room.players[room.playTurn];
-    let build = false;
 
     if (canBuild(room, p)) {
       room.boxes[p.game.pos].state += 1;
-      build = true;
+      removeMoney(p.game, 0);
     }
 
     await room.save();
+    await p.game.save();
+
+    io.getIO().to(roomId).emit('playRound', room);
+
+    res.status(201).json({
+      message: "build request succ"
+    })
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+exports.mortage = async (req, res, next) => {
+  try {
+    let roomId = req.params.roomId;
+
+    let room = await Room.findById(roomId).populate({
+      path: 'players',
+      populate: {
+        path: 'game'
+      }
+    });
+
+    let p = room.players[room.playTurn];
+
+    if (canMortage(room, p)) {
+      room.boxes[p.game.pos].state -= (room.boxes[p.game.pos].state != 1) ? 1 : 2;
+      addMoney(p.game, 0);
+    }
+
+    await room.save();
+    await p.game.save();
 
     io.getIO().to(roomId).emit('playRound', room);
 
